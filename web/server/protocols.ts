@@ -37,10 +37,12 @@ export function toChat(input: ObjectValue, protocol: Protocol): ObjectValue {
       else if (item.type !== 'reasoning') throw new Error(`暂不支持 Responses 输入类型 ${item.type}`);
     }
   } else {
-    // Anthropic billing metadata belongs to its transport, not the upstream prompt.
-    const stripBilling = (text: string) => text.replace(/^[\t ]*x-anthropic-billing-header:[^\r\n]*(?:\r?\n|$)/gm, '');
-    const system = typeof input.system === 'string' ? stripBilling(input.system) : array(input.system)
-      .map(value => { const part = object(value); return { ...part, text: stripBilling(String(part.text ?? '')) }; })
+    // Adapt Anthropic transport metadata and the CLI identity for this upstream.
+    const systemText = (text: string) => text
+      .replace(/^[\t ]*x-anthropic-billing-header:[^\r\n]*(?:\r?\n|$)/gm, '')
+      .replace(/^[\t ]*You are Claude Code, Anthropic's official CLI for Claude\.[\t ]*(?=\r?\n|$)/gm, 'You are a coding assistant.');
+    const system = typeof input.system === 'string' ? systemText(input.system) : array(input.system)
+      .map(value => { const part = object(value); return { ...part, text: systemText(String(part.text ?? '')) }; })
       .filter(part => part.text);
     if (system.length) messages.push({ role: 'system', content: textContent(system) });
     for (const value of array(input.messages)) {

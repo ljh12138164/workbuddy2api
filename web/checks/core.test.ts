@@ -108,6 +108,17 @@ describe('protocol adapters', () => {
     const result = toChat({ system: [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=test;' }], messages: [{ role: 'user', content: '你好' }] }, 'anthropic');
     expect(result.messages).toEqual([{ role: 'user', content: '你好' }]);
   });
+  it.each(['blocks', 'string'])('adapts the interactive Claude Code identity in %s prompts without changing task instructions', format => {
+    const identity = "You are Claude Code, Anthropic's official CLI for Claude.";
+    const instruction = 'Explain how to configure Claude Code. Keep all user constraints.';
+    const system = format === 'blocks' ? [{ type: 'text', text: identity }, { type: 'text', text: instruction }] : `${identity}\n${instruction}`;
+    const result = toChat({ system, messages: [{ role: 'user', content: identity }] }, 'anthropic');
+    const content = JSON.stringify((result.messages as { content: unknown }[])[0].content);
+    expect(content).not.toContain(identity);
+    expect(content).toContain('You are a coding assistant.');
+    expect(content).toContain(instruction);
+    expect(result.messages).toContainEqual({ role: 'user', content: identity });
+  });
   it('preserves Responses tools and tool results and rejects implicit server-side history', () => {
     const chat = toChat({ model: 'test', input: [{ type: 'function_call', call_id: 'call1', name: 'search', arguments: '{}' }, { type: 'function_call_output', call_id: 'call1', output: 'result' }], tools: [{ type: 'function', name: 'search', parameters: {} }] }, 'responses');
     expect(chat.messages).toEqual([{ role: 'assistant', content: null, tool_calls: [{ id: 'call1', type: 'function', function: { name: 'search', arguments: '{}' } }] }, { role: 'tool', tool_call_id: 'call1', content: 'result' }]);
