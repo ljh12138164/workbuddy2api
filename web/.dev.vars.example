@@ -1,0 +1,8 @@
+ADMIN_JWT_SECRET=
+DATA_ENCRYPTION_KEY=
+# Optional D1 HTTP mode: only used when no DB binding is configured.
+# CLOUDFLARE_ACCOUNT_ID=
+# D1_DATABASE_ID=7461d978-362a-4418-ae6b-071757d61bb2
+# D1_API_TOKEN=
+# Optional: a genuine device token obtained through your authorized client.
+# WORKBUDDY_DEVICE_TOKEN=

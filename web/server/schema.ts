@@ -1,0 +1,26 @@
+// Existing initial migration is preserved; administrator storage is additive.
+export const schema = [
+  `CREATE TABLE IF NOT EXISTS wb_accounts (
+    id TEXT PRIMARY KEY, uid TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+    credential TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
+    balance DOUBLE PRECISION NOT NULL DEFAULT 0, balance_total DOUBLE PRECISION NOT NULL DEFAULT 0,
+    credits TEXT NOT NULL DEFAULT '{}', updated_at DOUBLE PRECISION NOT NULL,
+    last_used_at DOUBLE PRECISION NOT NULL DEFAULT 0, cool_until DOUBLE PRECISION NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS wb_keys (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, key_hash TEXT NOT NULL UNIQUE, prefix TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1, request_limit INTEGER NOT NULL DEFAULT 0,
+    requests INTEGER NOT NULL DEFAULT 0, tokens DOUBLE PRECISION NOT NULL DEFAULT 0,
+    account_id TEXT, group_id TEXT, created_at DOUBLE PRECISION NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS wb_models (id TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1, detail TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS wb_groups (id TEXT PRIMARY KEY, name TEXT NOT NULL, models TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS wb_logs (
+    id TEXT PRIMARY KEY, key_id TEXT NOT NULL, account_id TEXT NOT NULL, model TEXT NOT NULL,
+    status INTEGER NOT NULL, input_tokens DOUBLE PRECISION NOT NULL DEFAULT 0,
+    output_tokens DOUBLE PRECISION NOT NULL DEFAULT 0, duration_ms DOUBLE PRECISION NOT NULL,
+    created_at DOUBLE PRECISION NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS wb_logs_time ON wb_logs(created_at, id)`,
+  `CREATE TABLE IF NOT EXISTS wb_leases (id TEXT PRIMARY KEY, owner TEXT NOT NULL, until_at DOUBLE PRECISION NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS wb_limits (id TEXT PRIMARY KEY, count INTEGER NOT NULL, expires_at DOUBLE PRECISION NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS wb_login_sessions (id TEXT PRIMARY KEY, payload TEXT NOT NULL, expires_at DOUBLE PRECISION NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS wb_admins (username TEXT PRIMARY KEY, password_hash TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, created_at REAL NOT NULL)`,
+];

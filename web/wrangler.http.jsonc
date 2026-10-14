@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "workbuddy2api-web",
+  "main": "server/worker.ts",
+  "compatibility_date": "2026-10-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "out",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/v1/*", "/health"]
+  },
+  "observability": { "enabled": true, "traces": { "enabled": true } }
+}

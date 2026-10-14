@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS wb_admins (username TEXT PRIMARY KEY, password_hash TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, created_at REAL NOT NULL);

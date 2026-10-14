@@ -1,0 +1,8 @@
+.next/
+out/
+.wrangler/
+.vercel/
+.dev.vars
+.env*
+!.env.example
+tsconfig.tsbuildinfo

@@ -1,0 +1,59 @@
+{
+  "name": "workbuddy2api-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm build && wrangler dev",
+    "dev:api": "wrangler dev",
+    "dev:d1": "pnpm build && wrangler dev --config wrangler.http.jsonc",
+    "build": "next build --webpack",
+    "start": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "deploy": "wrangler deploy && wrangler d1 migrations apply DB --remote",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "check:worker": "wrangler deploy --dry-run",
+    "dev:ui": "next dev"
+  },
+  "dependencies": {
+    "@trpc/client": "11.19.0",
+    "@trpc/server": "11.19.0",
+    "drizzle-orm": "0.45.4",
+    "hono": "4.13.13",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tough-cookie": "6.0.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261014.1",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4",
+    "wrangler": "4.150.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "DB": {
+        "description": "保存账号、API Key 和使用记录。"
+      },
+      "ADMIN_JWT_SECRET": {
+        "description": "至少 32 字符的随机会话签名密钥。"
+      },
+      "DATA_ENCRYPTION_KEY": {
+        "description": "至少 32 字符的随机凭证加密密钥；更换前请导出账号。"
+      }
+    }
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "packageManager": "pnpm@10.34.5",
+  "pnpm": { "onlyBuiltDependencies": ["esbuild", "workerd"] }
+}

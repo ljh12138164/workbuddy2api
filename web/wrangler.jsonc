@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "workbuddy2api-web",
+  "main": "server/worker.ts",
+  "compatibility_date": "2026-10-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "out",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/v1/*", "/health"]
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "workbody", "database_id": "7461d978-362a-4418-ae6b-071757d61bb2", "migrations_dir": "migrations" }],
+  "observability": { "enabled": true, "traces": { "enabled": true } }
+}

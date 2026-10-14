@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "outputDirectory": "out",
+  "functions": { "api/index.ts": { "maxDuration": 300 } },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index?__wb_path=/api/:path*" },
+    { "source": "/v1/:path*", "destination": "/api/index?__wb_path=/v1/:path*" },
+    { "source": "/health", "destination": "/api/index?__wb_path=/health" }
+  ]
+}

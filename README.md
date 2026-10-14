@@ -14,6 +14,8 @@
 
 **Android 本地版**：在 ARM64 手机上独立运行 Python 后端与 SQLite，通过手机号登录或浏览器 `/join` 授权添加账号。同机 API 地址默认 `http://127.0.0.1:8790/v1`，不包含扫描本机、客户端参数页面或拆包工具。构建与后台运行说明见 [android/README.md](android/README.md)。
 
+**Web 版**：新增独立的 [web/](web/README.md) 应用，采用 Next.js、Tailwind、Hono 和 tRPC，提供账号、API Key、模型、用量管理及兼容网关，支持分别部署到 Vercel 或纯 Cloudflare Workers。部署按钮与数据库配置见 Web 文档；本轮未启用自动签到和定时调度。
+
 ## 它是什么
 
 `workbuddy2api` 不负责登录、不模拟桌面端、不替你执行工具。对外它提供两类能力：
