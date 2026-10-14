@@ -3,8 +3,8 @@ import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import { appRouter, createContext } from './router';
-import { balanceEndpoint, gateway, modelsEndpoint } from './gateway';
+import { appRouter, createContext } from './router.js';
+import { balanceEndpoint, gateway, modelsEndpoint } from './gateway.js';
 import type { RuntimeEnv } from './types';
 
 export const app = new Hono<{ Bindings: RuntimeEnv }>();

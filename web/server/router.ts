@@ -1,11 +1,11 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { and, asc, desc, eq, getTableColumns, lt, or, sql } from 'drizzle-orm';
-import { accounts, admins, groups, keys, logs, models } from './tables';
-import { storeFor, type Store } from './store';
-import { adminToken, assertConfigured, digest, hashPassword, open, parseCredential, sessionUser, verifyPassword } from './security';
-import { accountCredential, array, fetchJson, importAccount, object, syncAccount, syncModels } from './upstream';
-import { startPhone, sendPhone, verifyPhone } from './phone-login';
+import { accounts, admins, groups, keys, logs, models } from './tables.js';
+import { storeFor, type Store } from './store.js';
+import { adminToken, assertConfigured, digest, hashPassword, open, parseCredential, sessionUser, verifyPassword } from './security.js';
+import { accountCredential, array, fetchJson, importAccount, object, syncAccount, syncModels } from './upstream.js';
+import { startPhone, sendPhone, verifyPhone } from './phone-login.js';
 import type { RuntimeEnv, Credential } from './types';
 
 export interface Context { env: RuntimeEnv; store: Store; admin: boolean; user?: { username: string; version: number } | null; request: Request; headers: Headers }

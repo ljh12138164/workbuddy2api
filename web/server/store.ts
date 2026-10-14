@@ -3,9 +3,9 @@ import { drizzle as d1Drizzle } from 'drizzle-orm/d1';
 import { drizzle as proxyDrizzle } from 'drizzle-orm/sqlite-proxy';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import type { RuntimeEnv } from './types';
-import { schema } from './schema';
-import * as tables from './tables';
-import { hashPassword } from './security';
+import { schema } from './schema.js';
+import * as tables from './tables.js';
+import { hashPassword } from './security.js';
 
 export class Store {
   constructor(public db: BaseSQLiteDatabase<'async', unknown, typeof tables>) {}

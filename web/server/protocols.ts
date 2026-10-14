@@ -1,4 +1,4 @@
-import { array, object, type ObjectValue } from './upstream';
+import { array, object, type ObjectValue } from './upstream.js';
 
 export type Protocol = 'chat' | 'responses' | 'anthropic';
 

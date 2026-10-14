@@ -1,4 +1,4 @@
-import { app } from '../server/app';
+import { app } from '../server/app.js';
 import type { RuntimeEnv } from '../server/types';
 
 export const config = { maxDuration: 300 };

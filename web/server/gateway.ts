@@ -1,11 +1,11 @@
 import type { Context } from 'hono';
-import { digest } from './security';
-import { storeFor, type Store } from './store';
-import { accountCredential, array, BACKEND, credentialHeaders, object, UpstreamError } from './upstream';
-import { fromChat, toChat, translateStream, type Protocol, type Usage } from './protocols';
+import { digest } from './security.js';
+import { storeFor, type Store } from './store.js';
+import { accountCredential, array, BACKEND, credentialHeaders, object, UpstreamError } from './upstream.js';
+import { fromChat, toChat, translateStream, type Protocol, type Usage } from './protocols.js';
 import type { AccountRow, KeyRow, RuntimeEnv } from './types';
 import { and, asc, eq, lt, or, sql } from 'drizzle-orm';
-import { accounts, groups, keys, logs, models as modelTable } from './tables';
+import { accounts, groups, keys, logs, models as modelTable } from './tables.js';
 
 type GatewayContext = Context<{ Bindings: RuntimeEnv }>;
 function failure(message: string, status: number) {

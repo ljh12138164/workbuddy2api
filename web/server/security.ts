@@ -90,4 +90,4 @@ export function parseCredential(raw: unknown): Credential {
 import { sign, verify } from 'hono/jwt';
 import { eq } from 'drizzle-orm';
 import type { Store } from './store';
-import { admins } from './tables';
+import { admins } from './tables.js';

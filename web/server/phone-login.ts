@@ -1,10 +1,10 @@
 import { CookieJar, type SerializedCookieJar } from 'tough-cookie';
-import { open, seal } from './security';
-import { importAccount, object, array, type ObjectValue } from './upstream';
+import { open, seal } from './security.js';
+import { importAccount, object, array, type ObjectValue } from './upstream.js';
 import type { Store } from './store';
 import type { Credential, RuntimeEnv } from './types';
 import { and, eq, gt, lt } from 'drizzle-orm';
-import { loginSessions } from './tables';
+import { loginSessions } from './tables.js';
 
 const HOST = 'https://www.workbuddy.cn';
 const OAUTH = 'https://oauth2.account.tencent.com';

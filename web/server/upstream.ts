@@ -1,8 +1,8 @@
-import { open, seal, parseCredential } from './security';
+import { open, seal, parseCredential } from './security.js';
 import type { AccountRow, Credential, RuntimeEnv } from './types';
 import type { Store } from './store';
 import { eq } from 'drizzle-orm';
-import { accounts, models } from './tables';
+import { accounts, models } from './tables.js';
 
 export type ObjectValue = Record<string, unknown>;
 export const object = (value: unknown): ObjectValue => value && typeof value === 'object' && !Array.isArray(value) ? value as ObjectValue : {};
