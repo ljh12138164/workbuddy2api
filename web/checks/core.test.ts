@@ -94,6 +94,20 @@ describe('persistent credentials and database coordination', () => {
 });
 
 describe('protocol adapters', () => {
+  it.each(['blocks', 'string'])('removes Anthropic billing metadata from %s system prompts while preserving instructions', format => {
+    const billing = 'x-anthropic-billing-header: cc_version=2.1.299; cc_entrypoint=sdk-cli;';
+    const instruction = 'Keep the user instructions and tool descriptions unchanged.';
+    const system = format === 'blocks' ? [{ type: 'text', text: billing }, { type: 'text', text: instruction }] : `${billing}\n${instruction}`;
+    const result = toChat({ model: 'test', system, messages: [{ role: 'user', content: '你好' }], tools: [{ name: 'search', description: instruction, input_schema: { type: 'object' } }] }, 'anthropic');
+    expect(JSON.stringify(result.messages)).not.toContain('x-anthropic-billing-header');
+    expect(JSON.stringify(result.messages)).toContain(instruction);
+    expect(JSON.stringify(result.tools)).toContain(instruction);
+    expect(result.messages).toContainEqual({ role: 'user', content: '你好' });
+  });
+  it('omits a system message containing only Anthropic billing metadata', () => {
+    const result = toChat({ system: [{ type: 'text', text: 'x-anthropic-billing-header: cc_version=test;' }], messages: [{ role: 'user', content: '你好' }] }, 'anthropic');
+    expect(result.messages).toEqual([{ role: 'user', content: '你好' }]);
+  });
   it('preserves Responses tools and tool results and rejects implicit server-side history', () => {
     const chat = toChat({ model: 'test', input: [{ type: 'function_call', call_id: 'call1', name: 'search', arguments: '{}' }, { type: 'function_call_output', call_id: 'call1', output: 'result' }], tools: [{ type: 'function', name: 'search', parameters: {} }] }, 'responses');
     expect(chat.messages).toEqual([{ role: 'assistant', content: null, tool_calls: [{ id: 'call1', type: 'function', function: { name: 'search', arguments: '{}' } }] }, { role: 'tool', tool_call_id: 'call1', content: 'result' }]);

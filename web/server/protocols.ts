@@ -37,7 +37,12 @@ export function toChat(input: ObjectValue, protocol: Protocol): ObjectValue {
       else if (item.type !== 'reasoning') throw new Error(`暂不支持 Responses 输入类型 ${item.type}`);
     }
   } else {
-    if (input.system) messages.push({ role: 'system', content: textContent(input.system) });
+    // Anthropic billing metadata belongs to its transport, not the upstream prompt.
+    const stripBilling = (text: string) => text.replace(/^[\t ]*x-anthropic-billing-header:[^\r\n]*(?:\r?\n|$)/gm, '');
+    const system = typeof input.system === 'string' ? stripBilling(input.system) : array(input.system)
+      .map(value => { const part = object(value); return { ...part, text: stripBilling(String(part.text ?? '')) }; })
+      .filter(part => part.text);
+    if (system.length) messages.push({ role: 'system', content: textContent(system) });
     for (const value of array(input.messages)) {
       const message = object(value);
       if (typeof message.content === 'string') { messages.push(message); continue; }
