@@ -5,7 +5,7 @@ import { accountCredential, array, BACKEND, credentialHeaders, object, UpstreamE
 import { fromChat, toChat, translateStream, type Protocol, type Usage } from './protocols.js';
 import type { AccountRow, KeyRow, RuntimeEnv } from './types';
 import { and, asc, eq, lt, or, sql } from 'drizzle-orm';
-import { accounts, groups, keys, logs, models as modelTable } from './tables.js';
+import { accounts, groups, keys, leases, logs, models as modelTable } from './tables.js';
 
 type GatewayContext = Context<{ Bindings: RuntimeEnv }>;
 function failure(message: string, status: number) {
@@ -75,13 +75,19 @@ export async function gateway(c: GatewayContext, protocol: Protocol) {
     completed = true;
     try {
       if (admitted && account) {
-        await store.db.insert(logs).values({ id: crypto.randomUUID(), key_id: key.id, account_id: account.id, model, status, input_tokens: usage.input, output_tokens: usage.output, duration_ms: Date.now() - started, created_at: Date.now() }).run();
-        await store.db.update(keys).set({ tokens: sql`${keys.tokens} + ${usage.input + usage.output}` }).where(eq(keys.id, key.id)).run();
+        const results = await Promise.allSettled([
+          store.db.insert(logs).values({ id: crypto.randomUUID(), key_id: key.id, account_id: account.id, model, status, input_tokens: usage.input, output_tokens: usage.output, duration_ms: Date.now() - started, created_at: Date.now() }).run(),
+          store.db.update(keys).set({ tokens: sql`${keys.tokens} + ${usage.input + usage.output}` }).where(eq(keys.id, key.id)).run(),
+        ]);
+        const failed = results.find(result => result.status === 'rejected');
+        if (failed?.status === 'rejected') throw failed.reason;
       }
     } catch { console.error(JSON.stringify({ event: 'gateway_accounting_failed', status })); }
     finally {
-      try { if (account && accountOwner) await store.release(`account:${account.id}`, accountOwner); }
-      finally { await store.release(keyLease!.id, keyLease!.owner); }
+      await store.db.delete(leases).where(or(
+        and(eq(leases.id, keyLease!.id), eq(leases.owner, keyLease!.owner)),
+        account && accountOwner ? and(eq(leases.id, `account:${account.id}`), eq(leases.owner, accountOwner)) : undefined,
+      )).run();
     }
   };
   try {

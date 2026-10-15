@@ -11,6 +11,18 @@ import { importAccount } from '../server/upstream';
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('persistent credentials and database coordination', () => {
+  it('retries initialization after a failure and shares concurrent initialization', async () => {
+    const { store, close } = memoryStore();
+    const run = vi.spyOn(store.db, 'run').mockRejectedValueOnce(new Error('temporary D1 failure'));
+    try {
+      await expect(store.initialize()).rejects.toThrow('temporary D1 failure');
+      await Promise.all([store.initialize(), store.initialize()]);
+      expect(run).toHaveBeenCalledTimes(schema.length + 1);
+      await store.initialize();
+      expect(run).toHaveBeenCalledTimes(schema.length + 1);
+      expect((await store.db.select().from(admins).all())).toHaveLength(1);
+    } finally { close(); }
+  });
   it('persists a salted password hash and never resets an existing administrator', async () => {
     const { store, close } = memoryStore();
     try {
@@ -50,10 +62,13 @@ describe('persistent credentials and database coordination', () => {
   it('atomically limits attempts and rolls over the next time window', async () => {
     vi.useFakeTimers(); vi.setSystemTime(1800000000000);
     const { store, close } = memoryStore(); await store.initialize();
+    const prune = vi.spyOn(store.db, 'delete');
     try {
       expect((await Promise.all(Array.from({ length: 10 }, () => store.limit('login', 3, 60000)))).filter(Boolean)).toHaveLength(3);
+      expect(prune).toHaveBeenCalledTimes(1);
       vi.setSystemTime(Date.now() + 60000);
       expect(await store.limit('login', 3, 60000)).toBe(true);
+      expect(prune).toHaveBeenCalledTimes(2);
     } finally { close(); }
   });
   it('keeps the D1 migrations aligned with the runtime schema', () => {

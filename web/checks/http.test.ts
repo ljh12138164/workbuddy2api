@@ -6,6 +6,7 @@ import { appRouter } from '../server/router';
 import { seal } from '../server/security';
 import vercel from '../api/index';
 import { accounts, leases, logs, models } from '../server/tables';
+import { eq } from 'drizzle-orm';
 
 let store: storage.Store;
 let close: () => void;
@@ -116,6 +117,15 @@ describe('HTTP auth, quotas and gateway accounting', () => {
     const groupKey = await admin.keys.create({ name: 'group', groupId: group.id });
     await admin.groups.remove({ id: group.id });
     expect((await request('/v1/chat/completions', groupKey.key, { model: 'test-model', messages: [{ role: 'user', content: 'hello' }] })).status).toBe(403);
+  });
+  it('releases only its own leases when an account lease has a new owner', async () => {
+    const { key } = await caller().keys.create({ name: 'lease-owner' });
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      await store.db.update(leases).set({ owner: 'new-owner' }).where(eq(leases.id, `account:${accountId}`)).run();
+      return Response.json(chat);
+    }));
+    expect((await request('/v1/chat/completions', key, { model: 'test-model', messages: [{ role: 'user', content: 'hello' }] })).status).toBe(200);
+    expect(await store.db.select().from(leases).all()).toMatchObject([{ id: `account:${accountId}`, owner: 'new-owner' }]);
   });
   it('atomically enforces a quota across concurrent requests to multiple accounts', async () => {
     for (let i = 0; i < 3; i++) await store.db.insert(accounts).values({ id: crypto.randomUUID(), uid: 'test-user-' + i, name: 'other', credential: await seal(credential, env), updated_at: Date.now() }).run();
