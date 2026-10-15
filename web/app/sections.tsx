@@ -24,14 +24,14 @@ export function Accounts({ data, run }: Props) {
     {!data.accounts.length ? <EmptyState title="添加你的第一个账号">在下方展开“导入账号”或“手机号登录”，连接账号后即可同步模型并创建 API Key。</EmptyState> : <div className="table-scroll overflow-x-auto"><table className="w-full"><thead><tr><th>账号</th><th>积分（缓存）</th><th>状态</th><th>操作</th></tr></thead><tbody>{data.accounts.map(account => <tr key={account.id}>
       <td><p>{account.name}</p><p className="text-xs text-slate-500">{account.uid}</p><details className="mt-2"><summary className="cursor-pointer">积分明细</summary><pre className="max-h-48 max-w-xs overflow-auto text-xs">{JSON.stringify(JSON.parse(account.credits), null, 2)}</pre></details></td>
       <td className="numeric">{account.balance.toLocaleString()} <span className="muted">/ {account.balance_total.toLocaleString()}</span></td><td><span className={`status-tag ${account.enabled ? 'status-enabled' : 'status-disabled'}`}>{account.enabled ? '启用' : '停用'}</span></td><td><div className="row-actions flex min-w-72 flex-wrap gap-2">
-        <button onClick={() => run(() => rpc.accounts.sync.mutate({ id: account.id }), '积分已同步')}>同步积分</button><button onClick={() => run(() => rpc.accounts.refresh.mutate({ id: account.id }), '凭证已刷新')}>刷新凭证</button>
-        <button onClick={() => run(() => rpc.accounts.update.mutate({ id: account.id, name: account.name, enabled: !account.enabled }))}>{account.enabled ? '停用' : '启用'}</button>
-        <button onClick={() => { const value = window.prompt('账号名称', account.name); if (value !== null) run(() => rpc.accounts.update.mutate({ id: account.id, name: value, enabled: Boolean(account.enabled) })); }}>改名</button>
-        <button onClick={() => { if (window.confirm(`删除账号 ${account.name}？绑定此账号的 Key 将无法继续调用。`)) run(() => rpc.accounts.remove.mutate({ id: account.id })); }}>删除</button>
+        <button onClick={() => run(() => rpc.accounts.sync.mutate({ id: account.id }), '积分已同步', ['accounts'])}>同步积分</button><button onClick={() => run(() => rpc.accounts.refresh.mutate({ id: account.id }), '凭证已刷新', ['accounts'])}>刷新凭证</button>
+        <button onClick={() => run(() => rpc.accounts.update.mutate({ id: account.id, name: account.name, enabled: !account.enabled }), undefined, ['accounts'])}>{account.enabled ? '停用' : '启用'}</button>
+        <button onClick={() => { const value = window.prompt('账号名称', account.name); if (value !== null) run(() => rpc.accounts.update.mutate({ id: account.id, name: value, enabled: Boolean(account.enabled) }), undefined, ['accounts']); }}>改名</button>
+        <button onClick={() => { if (window.confirm(`删除账号 ${account.name}？绑定此账号的 Key 将无法继续调用。`)) run(() => rpc.accounts.remove.mutate({ id: account.id }), undefined, ['accounts']); }}>删除</button>
       </div></td></tr>)}</tbody></table></div>}
   </Panel>
   <Panel title="导入账号"><form className="space-y-3" onSubmit={async e => {
-    e.preventDefault(); const result = await run(() => rpc.accounts.import.mutate({ name, credential }));
+    e.preventDefault(); const result = await run(() => rpc.accounts.import.mutate({ name, credential }), undefined, ['accounts']);
     if (result) { setImportResult(result.results.map(item => item.error || `已导入 ${item.uid}`).join('\n')); if (result.results.every(item => !item.error)) setCredential(''); }
   }}>
     <p className="text-sm text-slate-600">可粘贴完整凭证，或选择 .info / JSON 文件。新版加密凭证需先在桌面版导入后导出。</p>
@@ -42,7 +42,7 @@ export function Accounts({ data, run }: Props) {
     {importResult && <p role="status" className="whitespace-pre-wrap text-sm">{importResult}</p>}
   </form></Panel>
   <Panel title="手机号登录"><form className="grid items-end gap-3 sm:grid-cols-3" onSubmit={async e => {
-    e.preventDefault(); const result = await run(() => rpc.phone.verify.mutate({ id: session, code }), '账号已导入'); if (result) { setSession(''); setCode(''); }
+    e.preventDefault(); const result = await run(() => rpc.phone.verify.mutate({ id: session, code }), '账号已导入', ['accounts']); if (result) { setSession(''); setCode(''); }
   }}>
     <label>手机号<input inputMode="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} /></label>
     <button type="button" onClick={async () => {
@@ -56,7 +56,7 @@ export function Accounts({ data, run }: Props) {
 export function Keys({ data, run }: Props) {
   const [name, setName] = useState(''); const [limit, setLimit] = useState(0); const [account, setAccount] = useState(''); const [group, setGroup] = useState(''); const [created, setCreated] = useState('');
   return <><Panel title="创建 API Key"><form className="grid gap-3 sm:grid-cols-2" onSubmit={async e => {
-    e.preventDefault(); const result = await run(() => rpc.keys.create.mutate({ name, requestLimit: limit, accountId: account || null, groupId: group || null })); if (result) { setCreated(result.key); setName(''); }
+    e.preventDefault(); const result = await run(() => rpc.keys.create.mutate({ name, requestLimit: limit, accountId: account || null, groupId: group || null }), undefined, ['keys']); if (result) { setCreated(result.key); setName(''); }
   }}>
     <label>名称<input required maxLength={120} value={name} onChange={e => setName(e.target.value)} /></label><label>请求次数配额（0 为不限）<input required type="number" min={0} max={100000000} value={limit} onChange={e => setLimit(Number(e.target.value))} /></label>
     <label>账号范围<AccountSelect data={data} value={account} onChange={setAccount} optional /></label><label>模型分组<select value={group} onChange={e => setGroup(e.target.value)}><option value="">全部启用模型</option>{data.groups.map(value => <option key={value.id} value={value.id}>{value.name}</option>)}</select></label><button type="submit">创建</button>
@@ -64,18 +64,18 @@ export function Keys({ data, run }: Props) {
   <Panel title="API Key 列表"><p className="text-sm text-slate-600">网关受理并分配到账号的请求占用配额，失败也计数。每个 Key 每分钟最多 60 次、并发最多 4 个。</p>
     {!data.keys.length ? <EmptyState title="还没有访问密钥" icon="key">使用上方表单创建 API Key，再将它填写到你的 AI 客户端中。</EmptyState> : <div className="table-scroll overflow-x-auto"><table className="w-full"><thead><tr><th>名称 / 前缀</th><th>范围</th><th>已用 / 配额</th><th>Token</th><th>操作</th></tr></thead><tbody>{data.keys.map(key => <tr key={key.id}>
       <td>{key.name}<p className="font-mono text-xs text-slate-500">{key.prefix}…</p></td><td>{key.account_id ? data.accounts.find(a => a.id === key.account_id)?.name || '账号已删除' : '共享账号池'}<p className="text-xs text-slate-500">{key.group_id ? data.groups.find(g => g.id === key.group_id)?.name || '分组已删除' : '全部启用模型'}</p></td><td>{key.requests} / {key.request_limit || '不限'}</td><td>{key.tokens.toLocaleString()}</td><td><div className="flex gap-2">
-        <button onClick={() => run(() => rpc.keys.update.mutate({ id: key.id, enabled: !key.enabled, requestLimit: key.request_limit }))}>{key.enabled ? '停用' : '启用'}</button><button onClick={() => { const value = window.prompt('请求次数配额，0 为不限', String(key.request_limit)); if (value !== null && /^\d+$/.test(value)) run(() => rpc.keys.update.mutate({ id: key.id, enabled: Boolean(key.enabled), requestLimit: Number(value) })); }}>改配额</button><button onClick={() => { if (window.confirm(`删除 Key ${key.name}？`)) run(() => rpc.keys.remove.mutate({ id: key.id })); }}>删除</button>
+        <button onClick={() => run(() => rpc.keys.update.mutate({ id: key.id, enabled: !key.enabled, requestLimit: key.request_limit }), undefined, ['keys'])}>{key.enabled ? '停用' : '启用'}</button><button onClick={() => { const value = window.prompt('请求次数配额，0 为不限', String(key.request_limit)); if (value !== null && /^\d+$/.test(value)) run(() => rpc.keys.update.mutate({ id: key.id, enabled: Boolean(key.enabled), requestLimit: Number(value) }), undefined, ['keys']); }}>改配额</button><button onClick={() => { if (window.confirm(`删除 Key ${key.name}？`)) run(() => rpc.keys.remove.mutate({ id: key.id }), undefined, ['keys']); }}>删除</button>
       </div></td></tr>)}</tbody></table></div>}
   </Panel></>;
 }
 
 export function Models({ data, run }: Props) {
   const [account, setAccount] = useState(''); const [name, setName] = useState(''); const [selected, setSelected] = useState<string[]>([]); const [editing, setEditing] = useState<string>();
-  return <><Panel title="模型目录"><form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); run(() => rpc.models.sync.mutate({ id: account }), '模型目录已同步'); }}><label className="min-w-48">同步来源<AccountSelect data={data} value={account} onChange={setAccount} /></label><button>同步模型</button></form>
-    {!data.models.length ? <EmptyState title="同步你的模型目录" icon="models">选择一个已添加的账号并同步模型。勾选启用的模型后，客户端即可使用对应的模型 ID。</EmptyState> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{data.models.map(model => <label className="model-option" key={model.id}><input type="checkbox" checked={Boolean(model.enabled)} onChange={e => run(() => rpc.models.toggle.mutate({ id: model.id, enabled: e.target.checked }))} /><code className="break-all">{model.id}</code></label>)}</div>}
-  </Panel><Panel title="模型分组"><form className="space-y-3" onSubmit={async e => { e.preventDefault(); const result = await run(() => rpc.groups.save.mutate({ id: editing, name, models: selected })); if (result) { setName(''); setSelected([]); setEditing(undefined); } }}>
+  return <><Panel title="模型目录"><form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); run(() => rpc.models.sync.mutate({ id: account }), '模型目录已同步', ['models']); }}><label className="min-w-48">同步来源<AccountSelect data={data} value={account} onChange={setAccount} /></label><button>同步模型</button></form>
+    {!data.models.length ? <EmptyState title="同步你的模型目录" icon="models">选择一个已添加的账号并同步模型。勾选启用的模型后，客户端即可使用对应的模型 ID。</EmptyState> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{data.models.map(model => <label className="model-option" key={model.id}><input type="checkbox" checked={Boolean(model.enabled)} onChange={e => run(() => rpc.models.toggle.mutate({ id: model.id, enabled: e.target.checked }), undefined, ['models'])} /><code className="break-all">{model.id}</code></label>)}</div>}
+  </Panel><Panel title="模型分组"><form className="space-y-3" onSubmit={async e => { e.preventDefault(); const result = await run(() => rpc.groups.save.mutate({ id: editing, name, models: selected }), undefined, ['groups']); if (result) { setName(''); setSelected([]); setEditing(undefined); } }}>
     <label>分组名称<input required maxLength={120} value={name} onChange={e => setName(e.target.value)} /></label><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{data.models.map(model => <label key={model.id} className="model-option"><input type="checkbox" checked={selected.includes(model.id)} onChange={e => setSelected(e.target.checked ? [...selected, model.id] : selected.filter(id => id !== model.id))} /><span className="break-all">{model.id}</span></label>)}</div><div className="flex gap-2"><button>{editing ? '保存分组' : '创建分组'}</button>{editing && <button type="button" onClick={() => { setEditing(undefined); setName(''); setSelected([]); }}>取消编辑</button>}</div>
-  </form><ul className="space-y-3">{data.groups.map(group => <li key={group.id} className="border-t border-slate-200 pt-3"><p>{group.name}</p><p className="my-2 break-all text-sm text-slate-600">{JSON.parse(group.models).join(', ') || '未允许任何模型'}</p><div className="flex gap-2"><button onClick={() => { setEditing(group.id); setName(group.name); setSelected(JSON.parse(group.models)); }}>编辑</button><button onClick={() => { if (window.confirm('删除分组后，绑定的 Key 将不能使用任何模型。继续？')) run(() => rpc.groups.remove.mutate({ id: group.id })); }}>删除</button></div></li>)}</ul></Panel></>;
+  </form><ul className="space-y-3">{data.groups.map(group => <li key={group.id} className="border-t border-slate-200 pt-3"><p>{group.name}</p><p className="my-2 break-all text-sm text-slate-600">{JSON.parse(group.models).join(', ') || '未允许任何模型'}</p><div className="flex gap-2"><button onClick={() => { setEditing(group.id); setName(group.name); setSelected(JSON.parse(group.models)); }}>编辑</button><button onClick={() => { if (window.confirm('删除分组后，绑定的 Key 将不能使用任何模型。继续？')) run(() => rpc.groups.remove.mutate({ id: group.id }), undefined, ['groups']); }}>删除</button></div></li>)}</ul></Panel></>;
 }
 
 export function SecuritySettings({ onChanged }: { onChanged: () => void }) {

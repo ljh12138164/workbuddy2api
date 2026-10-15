@@ -7,6 +7,8 @@ import { seal } from '../server/security';
 import vercel from '../api/index';
 import { accounts, leases, logs, models } from '../server/tables';
 import { eq } from 'drizzle-orm';
+import { authenticate } from '../server/gateway';
+import { GatewayRequest } from '../server/gateway-request';
 
 let store: storage.Store;
 let close: () => void;
@@ -20,8 +22,8 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); close(); });
 function caller() { return appRouter.createCaller({ env, store, admin: true, request: new Request('https://example.test'), headers: new Headers() }); }
-function request(path: string, key: string, input: unknown) {
-  return app.fetch(new Request('https://example.test' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(input) }), env);
+function request(path: string, key: string, input: unknown, signal?: AbortSignal) {
+  return app.fetch(new Request('https://example.test' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(input), signal }), env);
 }
 function managementRequest(path: string, input: unknown, cookie?: string) {
   return app.fetch(new Request('https://example.test/api/trpc/' + path, { method: 'POST', headers: { Origin: 'https://example.test', 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(input) }), env);
@@ -135,6 +137,66 @@ describe('HTTP auth, quotas and gateway accounting', () => {
     expect(results.filter(response => response.status === 200)).toHaveLength(1);
     expect(results.filter(response => response.status === 429)).toHaveLength(3);
     expect((await caller().keys.list())[0].requests).toBe(1);
+    expect(await store.db.select().from(leases).all()).toHaveLength(0);
+  });
+  it.each(['account-lease', 'quota', 'account-update'])('releases acquired leases when admission fails at %s', async stage => {
+    const { key } = await caller().keys.create({ name: 'admission-failure' });
+    const upstream = vi.fn(); vi.stubGlobal('fetch', upstream);
+    if (stage === 'account-lease') {
+      const lease = store.lease.bind(store);
+      vi.spyOn(store, 'lease').mockImplementation((id, duration) => {
+        if (id.startsWith('account:')) throw new Error('lease unavailable');
+        return lease(id, duration);
+      });
+    } else {
+      const update = store.db.update.bind(store.db);
+      const spy = vi.spyOn(store.db, 'update');
+      if (stage === 'account-update') spy.mockImplementationOnce(update);
+      spy.mockImplementationOnce(() => { throw new Error('database unavailable'); });
+    }
+    expect((await request('/v1/chat/completions', key, { model: 'test-model', messages: [{ role: 'user', content: 'hello' }] })).status).toBe(502);
+    expect(upstream).not.toHaveBeenCalled();
+    expect(await store.db.select().from(leases).all()).toHaveLength(0);
+    expect((await caller().keys.list())[0].requests).toBe(stage === 'account-update' ? 1 : 0);
+    expect(await caller().stats()).toMatchObject({ requests: stage === 'account-update' ? 1 : 0 });
+  });
+  it.each(['reader', 'signal'])('cancels an in-flight stream read through %s and settles once before releasing its leases', async method => {
+    const { key } = await caller().keys.create({ name: 'cancel' });
+    const clientAbort = new AbortController();
+    let readStarted!: () => void;
+    const reading = new Promise<void>(resolve => { readStarted = resolve; });
+    let upstreamCancelled = false;
+    vi.stubGlobal('fetch', vi.fn(async (_input: unknown, init?: RequestInit) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          init!.signal!.addEventListener('abort', () => { upstreamCancelled = true; controller.error(new Error('aborted')); }, { once: true });
+        },
+        pull() { readStarted(); },
+      });
+      return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
+    }));
+    const result = await request('/v1/chat/completions', key, { model: 'test-model', messages: [{ role: 'user', content: 'hello' }], stream: true }, clientAbort.signal);
+    const reader = result.body!.getReader();
+    const pending = reader.read();
+    await reading;
+    if (method === 'reader') await reader.cancel();
+    else clientAbort.abort();
+    expect(await pending).toMatchObject({ done: true });
+    expect(upstreamCancelled).toBe(true);
+    expect(await store.db.select().from(leases).all()).toHaveLength(0);
+    expect(await caller().logs.list()).toMatchObject([{ status: 499 }]);
+    expect((await caller().keys.list())[0].requests).toBe(1);
+  });
+  it('shares settlement between completion and cancellation callers', async () => {
+    const { key } = await caller().keys.create({ name: 'shared-settlement' });
+    const row = await authenticate(new Request('https://example.test', { headers: { Authorization: 'Bearer ' + key } }), store);
+    const session = await GatewayRequest.start(store, row!, 'test-model');
+    session.usage.input = 3; session.usage.output = 2;
+    const completion = session.finish(200), cancellation = session.finish(499);
+    expect(cancellation).toBe(completion);
+    await Promise.all([completion, cancellation]);
+    expect(await caller().stats()).toEqual({ requests: 1, tokens: 5, failed: 0 });
+    expect((await caller().keys.list())[0]).toMatchObject({ requests: 1, tokens: 5 });
     expect(await store.db.select().from(leases).all()).toHaveLength(0);
   });
   it('accounts for final stream usage and fails interrupted streams', async () => {

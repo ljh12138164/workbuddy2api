@@ -11,6 +11,7 @@
     "start": "wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && node checks/vercel-entry.mjs",
+    "test:browser": "node checks/console.browser.mjs",
     "deploy": "wrangler deploy && wrangler d1 migrations apply DB --remote",
     "db:local": "wrangler d1 migrations apply DB --local",
     "check:worker": "wrangler deploy --dry-run",
