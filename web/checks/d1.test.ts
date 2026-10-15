@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { env } from './helpers';
+import { env, eventBody } from './helpers';
 import { app } from '../server/app';
 import { storeFor } from '../server/store';
 import { accounts as accountsTable, keys, leases, models } from '../server/tables';
@@ -14,10 +14,12 @@ it('runs login and management through the D1 HTTP driver without a Worker bindin
   const remoteEnv = { ...env, CLOUDFLARE_ACCOUNT_ID: 'test-account', D1_DATABASE_ID: 'test-database', D1_API_TOKEN: 'test-d1-token' };
   const queries: string[] = [];
   let failAccounting = false;
+  let failRelease = false;
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     // Workers rejects this redirect mode before sending the request.
     if (init?.redirect === 'error') throw new TypeError('Workers does not support redirect: error');
     if (String(input) === 'https://copilot.tencent.com/v2/chat/completions') {
+      if (JSON.parse(String(init?.body)).stream) return new Response(eventBody([{ choices: [{ delta: { content: 'OK' } }] }, '[DONE]']), { headers: { 'Content-Type': 'text/event-stream' } });
       return Response.json({ choices: [{ message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }], usage: { prompt_tokens: 2, completion_tokens: 1 } });
     }
     expect(String(input)).toBe('https://api.cloudflare.com/client/v4/accounts/test-account/d1/database/test-database/raw');
@@ -25,6 +27,7 @@ it('runs login and management through the D1 HTTP driver without a Worker bindin
     const query = JSON.parse(String(init?.body)) as { sql: string; params: (string | number | null)[] };
     queries.push(query.sql);
     if (failAccounting && query.sql.startsWith('insert into "wb_logs"')) return new Response(null, { status: 500 });
+    if (failRelease && query.sql.startsWith('delete from "wb_leases"')) return new Response(null, { status: 500 });
     const statement = database.prepare(query.sql);
     let rows: unknown[][] = [];
     const columns = statement.columns().map(column => column.name);
@@ -71,6 +74,17 @@ it('runs login and management through the D1 HTTP driver without a Worker bindin
     expect(errors).toHaveBeenCalledOnce();
     expect(await store.db.select().from(leases).all()).toHaveLength(0);
     expect((await store.db.select().from(keys).get())?.tokens).toBe(6);
+    failAccounting = false; failRelease = true;
+    for (const stream of [false, true]) {
+      queries.length = 0;
+      const failed = await app.fetch(new Request('https://vercel.test/v1/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer test-key', 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'test-model', messages: [{ role: 'user', content: 'hello' }], stream }) }), remoteEnv);
+      expect(failed.status).toBe(stream ? 200 : 502);
+      if (stream) expect(await failed.text()).toContain('upstream_error');
+      else expect(await failed.json()).toMatchObject({ error: { type: 'gateway_error', code: 502 } });
+      expect(queries.filter(query => query.startsWith('insert into "wb_logs"'))).toHaveLength(1);
+      expect(queries.filter(query => query.startsWith('delete from "wb_leases"'))).toHaveLength(1);
+      database.exec('DELETE FROM wb_leases');
+    }
   } finally { database.close(); }
 });
 

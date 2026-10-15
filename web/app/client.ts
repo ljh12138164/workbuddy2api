@@ -9,4 +9,5 @@ export interface Data {
   accounts: Outputs['accounts']['list']; keys: Outputs['keys']['list'];
   models: Outputs['models']['list']; groups: Outputs['groups']['list']; stats: Outputs['stats'];
 }
-export type Run = <T>(operation: () => Promise<T>, message?: string) => Promise<T | undefined>;
+export type DataSection = keyof Data;
+export type Run = <T>(operation: () => Promise<T>, message?: string, changed?: DataSection[]) => Promise<T | undefined>;
