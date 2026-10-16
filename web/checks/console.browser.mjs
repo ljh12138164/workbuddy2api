@@ -34,6 +34,7 @@ try {
     'keys.list': [], 'models.list': [], 'groups.list': [],
     stats: { requests: 0, tokens: 0, failed: 0 },
     'growth.list': { tasks: [] },
+    'growth.run': { ok: true, accountId: 'test-account', interrupted: false, credit: 100, tasks: [{ task_code: 'chat_5', title: '对话任务', status: 'claimed', ok: true, fired: 1, credit: 100 }] },
     'keys.create': { id: 'test-key', key: 'sk-once-only' },
     'accounts.update': { ok: true },
   };
@@ -77,10 +78,18 @@ try {
 
   calls.length = 0;
   await page.getByRole('button', { name: '成长任务', exact: true }).click();
-  await page.locator('[data-panel="手动成长任务"] select').selectOption('test-account');
+  await page.locator('[data-panel="成长任务"] select').selectOption('test-account');
   await page.getByRole('button', { name: '查询任务', exact: true }).click();
   await page.getByText('没有可展示的任务', { exact: true }).waitFor(); await idle();
   assert.deepEqual(calls, ['growth.list']);
+
+  calls.length = 0;
+  await page.getByRole('button', { name: '复制账号 ID', exact: true }).click(); await idle();
+  assert.equal(await page.evaluate(() => window.__copied), 'test-account');
+  assert.deepEqual(calls, []);
+  await page.getByRole('button', { name: '自动完成全部任务', exact: true }).click();
+  await page.getByText('任务执行完成，本次领取 100 积分。', { exact: true }).waitFor(); await idle();
+  assert.deepEqual(calls, ['growth.run', 'growth.list']);
 
   calls.length = 0;
   await page.getByRole('button', { name: 'API Key', exact: true }).click();
@@ -90,7 +99,7 @@ try {
   assert.equal(await page.getByLabel('完整 Key（只显示这一次）').inputValue(), 'sk-once-only');
   assert.deepEqual(calls, ['keys.create', 'keys.list']);
   assert.deepEqual(browserErrors, []);
-  console.log('Console browser checks passed: single refresh, local actions, selective updates, task queries and successful mutation with failed refresh');
+  console.log('Console browser checks passed: single refresh, local actions, selective updates, task execution and successful mutation with failed refresh');
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

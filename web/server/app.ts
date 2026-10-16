@@ -6,6 +6,11 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter, createContext } from './router.js';
 import { balanceEndpoint, gateway, modelsEndpoint } from './gateway.js';
 import type { RuntimeEnv } from './types';
+import { z } from 'zod';
+import { automateAccount } from './growth.js';
+import { storeFor } from './store.js';
+import { GrowthError } from './growth-actions.js';
+import { UpstreamError } from './upstream.js';
 
 export const app = new Hono<{ Bindings: RuntimeEnv }>();
 app.use('*', secureHeaders({ referrerPolicy: 'no-referrer', xFrameOptions: 'DENY' }));
@@ -26,6 +31,21 @@ app.all('/api/trpc/*', c => fetchRequestHandler({
 }));
 app.get('/v1/models', modelsEndpoint);
 app.get('/v1/balance', balanceEndpoint);
+// Public automation routes intentionally require neither a management session nor an API key.
+for (const [path, refreshOnly] of [['/v1/growth/run', false], ['/v1/credentials/refresh', true]] as const) {
+  app.post(path, async c => {
+    const input = z.object({ accountId: z.string().uuid() }).strict().safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ error: '请提供有效的 accountId（UUID）' }, 400);
+    const store = storeFor(c.env);
+    await store.initialize();
+    try {
+      const result = await automateAccount(input.data.accountId, store, c.env, c.req.raw.signal, refreshOnly);
+      return c.json(result.body, result.status);
+    } catch (error) {
+      return c.json({ error: error instanceof GrowthError || error instanceof UpstreamError ? error.message : '账号操作失败，请检查凭证或稍后重试' }, 502);
+    }
+  });
+}
 app.post('/v1/chat/completions', c => gateway(c, 'chat'));
 app.post('/v1/responses', c => gateway(c, 'responses'));
 app.post('/v1/messages', c => gateway(c, 'anthropic'));

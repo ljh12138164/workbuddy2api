@@ -32,3 +32,11 @@
 ## 现有 adapter
 
 数据库使用 Drizzle 的 D1 原生绑定或 D1 HTTP adapter；测试使用 Node SQLite。上游传输使用 fetch，浏览器管理调用使用 tRPC。本次改进没有新增数据库或缓存框架。
+
+## 成长任务执行
+
+`server/growth.ts` 持有任务策略、执行顺序、上游状态核对和领奖结果；`server/growth-actions.ts` 持有各域的请求头、事件形状、真实业务对象查询及 Ardot MCP 调用。两者均为 TS，不调用 Python，也不依赖本地客户端。
+
+公开 POST `/v1/growth/run` 和 `/v1/credentials/refresh` 按已保存账号 UUID 操作，无登录或 API Key 校验。管理页的 tRPC 操作继续要求后台登录。两种入口共用 `automateAccount` 的账号租约，与网关对话互斥。凭证刷新复用 `accountCredential`，旋转后的凭证加密写回数据库，公开响应不包含令牌。
+
+任务事件响应成功只表示已提交；最终以任务列表的 `completed` / `claimed` 状态核对。未知、付费或无奖励任务注明原因并跳过。执行有时间预算，重试按上游进度继续，不建立内存后台作业。

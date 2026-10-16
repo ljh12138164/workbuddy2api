@@ -6,6 +6,7 @@ import { storeFor, type Store } from './store.js';
 import { adminToken, assertConfigured, digest, hashPassword, open, parseCredential, sessionUser, verifyPassword } from './security.js';
 import { accountCredential, array, fetchJson, importAccount, object, syncAccount, syncModels } from './upstream.js';
 import { startPhone, sendPhone, verifyPhone } from './phone-login.js';
+import { automateAccount, taskPlan } from './growth.js';
 import type { RuntimeEnv, Credential } from './types';
 
 export interface Context { env: RuntimeEnv; store: Store; admin: boolean; user?: { username: string; version: number } | null; request: Request; headers: Headers }
@@ -154,13 +155,19 @@ export const appRouter = t.router({
   growth: t.router({
     list: managementProcedure.input(idInput).query(async ({ ctx, input }) => {
       const credential = await accountCredential(await account(input.id, ctx.store), ctx.store, ctx.env);
-      return object((await fetchJson('/v2/activity/growth/tasks', credential, ctx.env)).data);
+      const data = object((await fetchJson('/v2/activity/growth/tasks', credential, ctx.env)).data);
+      return { ...data, tasks: array(data.tasks).map((value): Record<string, unknown> => { const task = object(value); const plan = taskPlan(task); return { ...task, actionable: Boolean(plan.action), strategy: plan.reason }; }) };
     }),
-    accept: managementProcedure.input(idInput.extend({ codes: z.array(z.string().regex(/^[\w-]+$/)).min(1).max(30) })).mutation(async ({ ctx, input }) => {
+    run: managementProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+      const result = await automateAccount(input.id, ctx.store, ctx.env, ctx.request.signal);
+      if (result.status !== 200) throw new TRPCError({ code: result.status === 404 ? 'NOT_FOUND' : 'CONFLICT', message: result.body.error });
+      return result.body;
+    }),
+    accept: managementProcedure.input(idInput.extend({ codes: z.array(z.string().regex(/^[\w.-]+$/)).min(1).max(30) })).mutation(async ({ ctx, input }) => {
       const credential = await accountCredential(await account(input.id, ctx.store), ctx.store, ctx.env);
       return object((await fetchJson('/v2/activity/growth/tasks/accept', credential, ctx.env, { task_codes: input.codes })).data);
     }),
-    claim: managementProcedure.input(idInput.extend({ code: z.string().regex(/^[\w-]+$/) })).mutation(async ({ ctx, input }) => {
+    claim: managementProcedure.input(idInput.extend({ code: z.string().regex(/^[\w.-]+$/) })).mutation(async ({ ctx, input }) => {
       const credential = await accountCredential(await account(input.id, ctx.store), ctx.store, ctx.env);
       return object((await fetchJson(`/activity/growth/tasks/${encodeURIComponent(input.code)}/claim`, credential, ctx.env, {})).data);
     }),

@@ -32,9 +32,16 @@ try {
     assert.equal(rejected.status, 403);
     assert.ok(rejected.headers.get('Content-Type').includes('application/json'));
     await rejected.json();
+    for (const path of ['/v1/growth/run', '/v1/credentials/refresh']) {
+      const response = await handler.fetch(new Request('https://example.test/api/index?__wb_path=' + path, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      }));
+      assert.equal(response.status, 400);
+      assert.match((await response.json()).error, /accountId/);
+    }
   `], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
-  console.log('Vercel emitted ESM entry: health and management requests passed');
+  console.log('Vercel emitted ESM entry: health, management and public automation routes passed');
 } finally {
   assert.equal(dirname(output), artifactRoot);
   assert.ok(resolve(output).startsWith(artifactRoot + sep));

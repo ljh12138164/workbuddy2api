@@ -103,16 +103,28 @@ export function SecuritySettings({ onChanged }: { onChanged: () => void }) {
 
 export function Growth({ data, run }: Props) {
   const [account, setAccount] = useState(''); const [code, setCode] = useState(''); const [tasks, setTasks] = useState<Outputs['growth']['list'] | null>(null);
+  const [result, setResult] = useState<Outputs['growth']['run'] | null>(null), [running, setRunning] = useState(false);
   const taskRows = Array.isArray(tasks?.tasks) ? tasks.tasks.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null) : [];
   const statusNames: Record<string, string> = { not_accepted: '未领取', accepted: '进行中', completed: '待领奖', claimed: '已领取' };
   const load = async () => { const result = await run(() => rpc.growth.list.query({ id: account })); if (result) setTasks(result); };
-  return <Panel title="手动成长任务"><p className="text-sm text-slate-600">查询任务后可按任务码手动领取任务和奖励；完成条件须在官方客户端满足。当前没有定时任务或自动签到。</p>
-    <form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); load(); }}><label className="min-w-48">账号<AccountSelect data={data} value={account} onChange={value => { setAccount(value); setTasks(null); }} /></label><button>查询任务</button></form>
+  const execute = async () => {
+    setRunning(true); setResult(null);
+    try {
+      const result = await run(() => rpc.growth.run.mutate({ id: account }));
+      if (result) { setResult(result); await load(); }
+    } finally { setRunning(false); }
+  };
+  return <Panel title="成长任务"><p className="text-sm text-slate-600">自动领取可执行任务、完成并核对上游进度，再领取奖励。需要捐款或尚无执行策略的任务会说明原因；支持再次执行未完成的任务。</p>
+    <fieldset disabled={running} className="space-y-4">
+    <form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); load(); }}><label className="min-w-48">账号<AccountSelect data={data} value={account} onChange={value => { setAccount(value); setTasks(null); setResult(null); }} /></label><button>查询任务</button><button type="button" disabled={!account} onClick={execute}>自动完成全部任务</button><button type="button" disabled={!account} onClick={() => run(() => navigator.clipboard.writeText(account), '账号 ID 已复制')}>复制账号 ID</button></form>
+    </fieldset>
+    {running && <p role="status">正在执行任务并核对进度，请保持页面打开……</p>}
+    {result && 'tasks' in result && <div role="status" className="space-y-2"><p>{result.ok ? '任务执行完成' : '部分任务未完成，请查看下方原因'}，本次领取 {result.credit} 积分。</p><ul>{result.tasks.map(task => <li key={task.task_code}>{task.title}：{task.status === 'skipped' ? '跳过' : statusNames[task.status] || task.status}{task.message ? `（${task.message}）` : ''}</li>)}</ul></div>}
     {!tasks ? <EmptyState title="查询账号的成长任务" icon="growth">选择账号，查看可领取的任务与奖励。任务操作由你手动执行。</EmptyState> : <>
-      {taskRows.length ? <div className="table-scroll overflow-x-auto"><table className="w-full"><thead><tr><th>任务 / 任务码</th><th>奖励积分</th><th>状态</th><th>操作</th></tr></thead><tbody>{taskRows.map((task, index) => <tr key={String(task.task_code ?? index)}><td>{String(task.title ?? task.task_code ?? '未命名任务')}<p className="font-mono text-xs text-slate-500">{String(task.task_code ?? '—')}</p></td><td className="numeric">{String(task.reward_credit ?? '—')}</td><td><span className="status-tag status-disabled">{statusNames[String(task.accept_status)] ?? String(task.accept_status ?? '未知')}</span></td><td><button disabled={typeof task.task_code !== 'string'} onClick={() => setCode(String(task.task_code))}>选择任务</button></td></tr>)}</tbody></table></div> : <EmptyState title="没有可展示的任务" icon="growth">可展开原始结果查看接口返回的完整信息。</EmptyState>}
+      {taskRows.length ? <div className="table-scroll overflow-x-auto"><table className="w-full"><thead><tr><th>任务 / 任务码</th><th>奖励积分</th><th>状态 / 进度</th><th>操作</th></tr></thead><tbody>{taskRows.map((task, index) => <tr key={String(task.task_code ?? index)}><td>{String(task.title ?? task.task_code ?? '未命名任务')}<p className="font-mono text-xs text-slate-500">{String(task.task_code ?? '—')}</p><p className="text-xs text-slate-500">{String(task.strategy ?? '')}</p></td><td className="numeric">{String(task.reward_credit ?? '—')}</td><td><span className="status-tag status-disabled">{statusNames[String(task.accept_status)] ?? String(task.accept_status ?? '未知')}</span><p className="numeric text-xs">{task.progress && typeof task.progress === 'object' ? `${String((task.progress as Record<string, unknown>).current ?? 0)} / ${String((task.progress as Record<string, unknown>).target ?? '—')}` : ''}</p></td><td><button disabled={running || typeof task.task_code !== 'string'} onClick={() => setCode(String(task.task_code))}>选择任务</button></td></tr>)}</tbody></table></div> : <EmptyState title="没有可展示的任务" icon="growth">可展开原始结果查看接口返回的完整信息。</EmptyState>}
       <details><summary className="text-xs text-slate-600">查看原始结果</summary><pre className="mt-3 max-h-96 overflow-auto p-3 text-xs">{JSON.stringify(tasks, null, 2)}</pre></details>
     </>}
-    <label>任务码<input value={code} pattern="[\w-]+" onChange={e => setCode(e.target.value)} placeholder="从查询结果中复制 task_code" /></label><div className="flex flex-wrap gap-2"><button disabled={!account || !/^[\w-]+$/.test(code)} onClick={async () => { if (await run(() => rpc.growth.accept.mutate({ id: account, codes: [code] }), '任务已领取')) await load(); }}>领取任务</button><button disabled={!account || !/^[\w-]+$/.test(code)} onClick={async () => { if (await run(() => rpc.growth.claim.mutate({ id: account, code }), '奖励请求已提交')) await load(); }}>领取奖励</button></div>
+    <label>任务码<input disabled={running} value={code} pattern="[\w.\-]+" onChange={e => setCode(e.target.value)} placeholder="从查询结果中复制 task_code" /></label><div className="flex flex-wrap gap-2"><button disabled={running || !account || !/^[\w.-]+$/.test(code)} onClick={async () => { if (await run(() => rpc.growth.accept.mutate({ id: account, codes: [code] }), '任务已领取')) await load(); }}>领取任务</button><button disabled={running || !account || !/^[\w.-]+$/.test(code)} onClick={async () => { if (await run(() => rpc.growth.claim.mutate({ id: account, code }), '奖励请求已提交')) await load(); }}>领取奖励</button></div>
   </Panel>;
 }
 
