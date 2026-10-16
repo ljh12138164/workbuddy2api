@@ -48,10 +48,26 @@ function expiration(credential: Credential) {
   } catch { return 0; }
 }
 
-export async function accountCredential(account: AccountRow, store: Store, env: RuntimeEnv, force = false) {
+export async function refreshCredential(credential: Credential, env: RuntimeEnv) {
+  const headers = credentialHeaders(credential, env);
+  headers.set('X-Refresh-Token', credential.auth.refreshToken);
+  headers.set('X-Auth-Refresh-Source', 'plugin');
+  const response = await fetch(BACKEND + '/v2/plugin/auth/token/refresh', {
+    method: 'POST', headers, body: '{}', signal: AbortSignal.timeout(20000), redirect: 'manual',
+  });
+  if (!response.ok) { await response.body?.cancel(); throw new UpstreamError(response.status); }
+  const result = object(await response.json());
+  const auth = object(result.data);
+  if (Number(result.code) !== 0 || typeof auth.accessToken !== 'string' || !auth.accessToken) throw new Error('凭证刷新失败，请重新登录账号');
+  return { ...credential, auth: { ...credential.auth, ...auth, accessToken: auth.accessToken,
+    expiresAt: Number(auth.expiresAt) || Date.now() + Number(auth.expiresIn || 3600) * 1000,
+  } } satisfies Credential;
+}
+
+export async function accountCredential(account: AccountRow, store: Store, env: RuntimeEnv, force = false, validFor = 60000) {
   let credential = await open<Credential>(account.credential, env);
   const expires = expiration(credential);
-  if (!force && (!expires || expires > Date.now() + 60000)) return credential;
+  if (!force && (!expires || expires > Date.now() + validFor)) return credential;
   const leaseId = `refresh:${account.id}`;
   const owner = await store.lease(leaseId, 30000);
   if (!owner) throw new Error('账号正在刷新凭证，请稍后重试');
@@ -59,19 +75,8 @@ export async function accountCredential(account: AccountRow, store: Store, env: 
     const fresh = await store.db.select().from(accounts).where(eq(accounts.id, account.id)).get();
     if (!fresh) throw new Error('账号已删除');
     credential = await open<Credential>(fresh.credential, env);
-    if (fresh.credential !== account.credential && expiration(credential) > Date.now() + 60000) return credential;
-    const headers = credentialHeaders(credential, env);
-    headers.set('X-Refresh-Token', credential.auth.refreshToken);
-    headers.set('X-Auth-Refresh-Source', 'plugin');
-    const response = await fetch(BACKEND + '/v2/plugin/auth/token/refresh', {
-      method: 'POST', headers, body: '{}', signal: AbortSignal.timeout(20000), redirect: 'manual',
-    });
-    if (!response.ok) { await response.body?.cancel(); throw new UpstreamError(response.status); }
-    const result = object(await response.json());
-    const auth = object(result.data);
-    if (Number(result.code) !== 0 || typeof auth.accessToken !== 'string') throw new Error('凭证刷新失败，请重新登录账号');
-    credential.auth = { ...credential.auth, ...auth, accessToken: auth.accessToken };
-    credential.auth.expiresAt = Number(auth.expiresAt) || Date.now() + Number(auth.expiresIn || 3600) * 1000;
+    if (fresh.credential !== account.credential && expiration(credential) > Date.now() + validFor) return credential;
+    credential = await refreshCredential(credential, env);
     const encrypted = await seal(credential, env);
     await store.db.update(accounts).set({ credential: encrypted, updated_at: Date.now() }).where(eq(accounts.id, account.id)).run();
     account.credential = encrypted;
